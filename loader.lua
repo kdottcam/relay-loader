@@ -137,13 +137,17 @@ local function fetchConfig()
     return nil
 end
 
+-- Each Sanctuary script has its own URL; picked per game from /api/loader/config.
+local scriptUrlForGame = nil
+
 local function loadRelay(k)
     -- The Sanctuary loader reads the global `key`; set it everywhere it might look.
     env.key = k
     pcall(function() getfenv(0).key = k end)
     key = k
+    local url = scriptUrlForGame or CONFIG.SanctuaryLoader
     local ok, err = pcall(function()
-        loadstring(game:HttpGet(CONFIG.SanctuaryLoader))()
+        loadstring(game:HttpGet(url))()
     end)
     return ok, err
 end
@@ -151,11 +155,6 @@ end
 ------------------------------------------------------------------------
 -- Fast paths: buyer-style key or saved key
 ------------------------------------------------------------------------
-if keyLooksValid(env.key) then
-    loadRelay(env.key)
-    return
-end
-
 local remote = fetchConfig() or {}
 if typeof(remote.links) == "table" then
     CONFIG.GetKeyUrl = remote.links.getKey or CONFIG.GetKeyUrl
@@ -168,14 +167,30 @@ if typeof(remote.games) == "table" then
     for _, entry in ipairs(remote.games) do
         if typeof(entry) == "table" and entry.placeId then
             supportedGames[tostring(entry.placeId)] = entry.name or "Supported game"
+            if tostring(entry.placeId) == tostring(game.PlaceId) and typeof(entry.loader) == "string" and #entry.loader > 0 then
+                scriptUrlForGame = entry.loader
+            end
         end
     end
+end
+
+-- If the config couldn't be fetched at all, don't lock everyone out: fall back to the project loader.
+local configAvailable = next(supportedGames) ~= nil
+local gameSupported = (not configAvailable) or supportedGames[tostring(game.PlaceId)] ~= nil
+local noScriptMessage = "Relay doesn't have a script for this game yet."
+
+if keyLooksValid(env.key) then
+    if not gameSupported then warn("[Relay] " .. noScriptMessage) return end
+    loadRelay(env.key)
+    return
 end
 
 local savedKeyError
 do
     local saved = readSavedKey()
-    if saved and keyLooksValid(saved) then
+    if saved and keyLooksValid(saved) and not gameSupported then
+        savedKeyError = noScriptMessage
+    elseif saved and keyLooksValid(saved) then
         local ok, message, retryable = validateKey(saved)
         if ok then
             local loaded, err = loadRelay(saved)
@@ -466,6 +481,7 @@ local function trySubmit()
     local k = input.Text:gsub("%s+", "")
     if #k == 0 then setStatus("Enter your Relay key first.", C.Bad, "circle-alert") return end
     if not keyLooksValid(k) then setStatus("That key is not in a valid format.", C.Bad, "circle-alert") return end
+    if not gameSupported then setStatus(noScriptMessage .. " Join a supported game and run the loader again.", C.Warn, "triangle-alert") return end
 
     busy = true
     setStatus("Checking key…", C.Muted, "loader-circle")
