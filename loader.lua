@@ -198,22 +198,43 @@ end
 -- Key UI
 ------------------------------------------------------------------------
 local C = {
-    Backdrop = Color3.fromRGB(8, 8, 12),
-    Panel    = Color3.fromRGB(18, 18, 26),
-    Panel2   = Color3.fromRGB(23, 23, 32),
-    Input    = Color3.fromRGB(28, 28, 38),
-    Stroke   = Color3.fromRGB(40, 40, 54),
+    Backdrop = Color3.fromRGB(4, 4, 8),
+    Panel    = Color3.fromRGB(12, 12, 18),
+    Card     = Color3.fromRGB(18, 18, 27),
+    Input    = Color3.fromRGB(22, 22, 32),
+    Stroke   = Color3.fromRGB(36, 36, 50),
     Accent   = Color3.fromRGB(167, 150, 240),
-    AccentDk = Color3.fromRGB(122, 106, 200),
-    Text     = Color3.fromRGB(242, 242, 247),
-    Muted    = Color3.fromRGB(138, 138, 153),
-    Good     = Color3.fromRGB(126, 226, 168),
+    AccentDk = Color3.fromRGB(128, 112, 205),
+    OnAccent = Color3.fromRGB(16, 12, 34),
+    Text     = Color3.fromRGB(244, 244, 250),
+    Muted    = Color3.fromRGB(132, 132, 150),
+    Good     = Color3.fromRGB(120, 224, 165),
     Warn     = Color3.fromRGB(240, 194, 107),
-    Bad      = Color3.fromRGB(255, 122, 122),
+    Bad      = Color3.fromRGB(255, 118, 118),
 }
 
-local FONT      = Enum.Font.GothamMedium
-local FONT_BOLD = Enum.Font.GothamBold
+local FONT       = Enum.Font.GothamMedium
+local FONT_BOLD  = Enum.Font.GothamBold
+local FONT_BLACK = Enum.Font.GothamBlack
+
+-- Lucide icons (https://lucide.dev) via latte-soft/lucide-roblox 48px sprite sheets: { assetId, x, y }
+local ICONS = {
+    ["key-round"]      = { 16898613509, 967, 306 },
+    ["globe"]          = { 16898613509, 771, 563 },
+    ["arrow-right"]    = { 16898612629, 453, 820 },
+    ["message-circle"] = { 16898613613, 563, 820 },
+    ["gamepad-2"]      = { 16898613353, 710, 967 },
+    ["monitor"]        = { 16898613613, 404, 820 },
+    ["shield-check"]   = { 16898613777, 820, 257 },
+    ["link"]           = { 16898613509, 918, 453 },
+    ["check"]          = { 16898612819, 710, 869 },
+    ["circle-check"]   = { 16898612819, 869, 955 },
+    ["circle-alert"]   = { 16898612819, 918, 808 },
+    ["triangle-alert"] = { 16898613869, 967, 0 },
+    ["loader-circle"]  = { 16898613509, 771, 906 },
+    ["x"]              = { 16898613869, 869, 906 },
+    ["lock"]           = { 16898613509, 918, 857 },
+}
 
 local function new(class, props, children)
     local inst = Instance.new(class)
@@ -234,109 +255,155 @@ local function label(props)
     for k, v in pairs(props) do base[k] = v end
     return new("TextLabel", base)
 end
+local function icon(name, size, color, props)
+    local data = ICONS[name] or ICONS["circle-alert"]
+    local base = {
+        BackgroundTransparency = 1, Image = "rbxassetid://" .. data[1],
+        ImageRectSize = Vector2.new(48, 48), ImageRectOffset = Vector2.new(data[2], data[3]),
+        ImageColor3 = color or C.Text, Size = UDim2.fromOffset(size, size), ScaleType = Enum.ScaleType.Fit,
+    }
+    for k, v in pairs(props or {}) do base[k] = v end
+    return new("ImageLabel", base)
+end
+local function setIcon(img, name)
+    local data = ICONS[name]
+    if not data then return end
+    img.Image = "rbxassetid://" .. data[1]
+    img.ImageRectOffset = Vector2.new(data[2], data[3])
+end
+
+-- Relay logo: two chevrons (white behind, lavender in front), each drawn from two rotated rounded bars.
+local function chevron(parent, x, y, height, color)
+    -- Roblox rotates around a frame's centre, so place each arm's centre on the diagonal explicitly.
+    local thick = math.max(4, math.floor(height * 0.26 + 0.5))
+    local arm = height * 0.66
+    local d = arm / math.sqrt(2)              -- horizontal/vertical extent of a 45° arm
+    local px = d + thick * 0.5                -- x of the chevron's point inside the holder
+    local holder = new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromOffset(math.ceil(d + thick), height), Position = UDim2.fromOffset(x, y), Parent = parent })
+    for _, arm_ in ipairs({ { rot = -45, cy = height / 2 - d / 2 }, { rot = 45, cy = height / 2 + d / 2 } }) do
+        new("Frame", {
+            BackgroundColor3 = color, BorderSizePixel = 0, Size = UDim2.fromOffset(thick, math.floor(arm + thick * 0.6)),
+            AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(px - d / 2, arm_.cy), Rotation = arm_.rot, Parent = holder,
+        }, { corner(thick) })
+    end
+    return holder
+end
+
+local function tween(obj, props, t)
+    TweenService:Create(obj, TweenInfo.new(t or 0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), props):Play()
+end
 
 -- Root ------------------------------------------------------------------
-local existing = guiParent():FindFirstChild("RelayKeySystem")
+local W, H = 540, 372
+local parentGui = guiParent()
+local existing = parentGui:FindFirstChild("RelayKeySystem")
 if existing then existing:Destroy() end
 
 local gui = new("ScreenGui", { Name = "RelayKeySystem", ResetOnSpawn = false, ZIndexBehavior = Enum.ZIndexBehavior.Sibling, DisplayOrder = 999, IgnoreGuiInset = true })
-
-local backdrop = new("Frame", { BackgroundColor3 = C.Backdrop, BackgroundTransparency = 0.35, Size = UDim2.fromScale(1, 1), BorderSizePixel = 0, Parent = gui })
+local backdrop = new("Frame", { BackgroundColor3 = C.Backdrop, BackgroundTransparency = 0.45, Size = UDim2.fromScale(1, 1), BorderSizePixel = 0, Parent = gui })
 
 local panel = new("Frame", {
     Name = "Panel", BackgroundColor3 = C.Panel, BorderSizePixel = 0,
-    AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(620, 340),
+    AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(W, H),
     Parent = gui,
-}, { corner(16), stroke(C.Stroke, 1) })
+}, { corner(18), stroke(C.Stroke, 1) })
 
--- Scale down on small (mobile) viewports
+-- faint lavender outer ring so the panel lifts off busy game backgrounds
+new("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(1, 6, 1, 6), ZIndex = 0, Parent = panel }, { corner(21), stroke(C.Accent, 1, 0.85) })
+
 local scale = new("UIScale", { Parent = panel })
 local function fitScale()
     local cam = workspace.CurrentCamera
     if not cam then return end
     local vp = cam.ViewportSize
-    local s = math.min(1, (vp.X - 24) / 620, (vp.Y - 24) / 340)
-    scale.Scale = math.max(0.55, s)
+    scale.Scale = math.max(0.55, math.min(1, (vp.X - 24) / W, (vp.Y - 24) / H))
 end
 fitScale()
 if workspace.CurrentCamera then workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(fitScale) end
 
--- Left column --------------------------------------------------------------
-local left = new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(0.58, 0, 1, 0), Parent = panel }, { pad(26, 22, 22, 28) })
+-- Header ------------------------------------------------------------------
+local header = new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 68), Parent = panel }, { pad(0, 18, 0, 22) })
+chevron(header, 0, 20, 28, Color3.fromRGB(250, 250, 252))
+chevron(header, 15, 20, 28, C.Accent)
+label({ Text = "relay", Font = FONT_BLACK, TextSize = 24, Size = UDim2.fromOffset(80, 30), Position = UDim2.fromOffset(52, 19), Parent = header })
+local badge = new("Frame", { BackgroundColor3 = C.Card, BorderSizePixel = 0, Size = UDim2.fromOffset(92, 22), Position = UDim2.fromOffset(126, 23), Parent = header }, { corner(11), stroke(C.Stroke, 1) })
+icon("lock", 11, C.Accent, { Position = UDim2.fromOffset(9, 5), Parent = badge })
+label({ Text = "KEY SYSTEM", Font = FONT_BOLD, TextSize = 10, TextColor3 = C.Accent, Size = UDim2.new(1, -26, 1, 0), Position = UDim2.fromOffset(25, 0), Parent = badge })
 
-local logoRow = new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 44), Parent = left })
-local chevrons = label({ Text = "»", Font = FONT_BOLD, TextSize = 40, TextColor3 = C.Accent, Size = UDim2.fromOffset(34, 44), Position = UDim2.fromOffset(0, -4), Parent = logoRow })
-label({ Text = "relay", Font = FONT_BOLD, TextSize = 26, Size = UDim2.new(1, -40, 0, 26), Position = UDim2.fromOffset(40, 2), Parent = logoRow })
-label({ Text = "Key system", TextColor3 = C.Muted, TextSize = 12, Size = UDim2.new(1, -40, 0, 16), Position = UDim2.fromOffset(40, 27), Parent = logoRow })
+local closeBtn = new("TextButton", { BackgroundColor3 = C.Card, AutoButtonColor = false, Text = "", BorderSizePixel = 0, AnchorPoint = Vector2.new(1, 0), Size = UDim2.fromOffset(30, 30), Position = UDim2.new(1, 0, 0, 19), Parent = header }, { corner(9), stroke(C.Stroke, 1) })
+local closeIcon = icon("x", 14, C.Muted, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Parent = closeBtn })
+closeBtn.MouseEnter:Connect(function() tween(closeIcon, { ImageColor3 = C.Text }) end)
+closeBtn.MouseLeave:Connect(function() tween(closeIcon, { ImageColor3 = C.Muted }) end)
+closeBtn.MouseButton1Click:Connect(function() gui:Destroy() end)
 
-label({ Text = "LICENSE KEY", TextColor3 = C.Muted, TextSize = 11, Font = FONT_BOLD, Size = UDim2.new(1, 0, 0, 14), Position = UDim2.fromOffset(0, 74), Parent = left })
+-- accent hairline under the header
+local hair = new("Frame", { BackgroundColor3 = C.Accent, BorderSizePixel = 0, Size = UDim2.new(1, -44, 0, 1), Position = UDim2.fromOffset(22, 68), Parent = panel })
+new("UIGradient", { Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.2), NumberSequenceKeypoint.new(0.6, 0.75), NumberSequenceKeypoint.new(1, 1) }), Parent = hair })
 
-local inputFrame = new("Frame", { BackgroundColor3 = C.Input, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, 44), Position = UDim2.fromOffset(0, 92), Parent = left }, { corner(10), stroke(C.Stroke, 1) })
+-- Body --------------------------------------------------------------------
+local body = new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, -69), Position = UDim2.fromOffset(0, 69), Parent = panel }, { pad(18, 22, 20, 22) })
+
+-- Game strip
+local gameCard = new("Frame", { BackgroundColor3 = C.Card, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, 64), Parent = body }, { corner(12), stroke(C.Stroke, 1) })
+local thumb = new("ImageLabel", { BackgroundColor3 = C.Input, BorderSizePixel = 0, Size = UDim2.fromOffset(44, 44), Position = UDim2.fromOffset(10, 10), Image = "", ScaleType = Enum.ScaleType.Crop, Parent = gameCard }, { corner(9) })
+local thumbPlaceholder = icon("gamepad-2", 20, C.Muted, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Parent = thumb })
+local gameName = label({ Text = "Detecting game…", Font = FONT_BOLD, TextSize = 14, Size = UDim2.new(1, -220, 0, 18), Position = UDim2.fromOffset(64, 14), TextTruncate = Enum.TextTruncate.AtEnd, Parent = gameCard })
+local gameStateIcon = icon("loader-circle", 12, C.Muted, { Position = UDim2.fromOffset(64, 36), Parent = gameCard })
+local gameState = label({ Text = "Checking support", TextSize = 12, TextColor3 = C.Muted, Size = UDim2.new(1, -240, 0, 16), Position = UDim2.fromOffset(80, 34), Parent = gameCard })
+
+local execChip = new("Frame", { BackgroundColor3 = C.Input, BorderSizePixel = 0, AutomaticSize = Enum.AutomaticSize.X, AnchorPoint = Vector2.new(1, 0.5), Size = UDim2.fromOffset(0, 28), Position = UDim2.new(1, -12, 0.5, 0), Parent = gameCard }, { corner(8), stroke(C.Stroke, 1), pad(0, 10, 0, 10) })
+new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 6), Parent = execChip })
+icon("monitor", 13, C.Muted, { Parent = execChip })
+label({ Text = executorName(), Font = FONT_BOLD, TextSize = 12, AutomaticSize = Enum.AutomaticSize.X, Size = UDim2.fromOffset(0, 28), Parent = execChip })
+
+-- Key row
+label({ Text = "LICENSE KEY", Font = FONT_BOLD, TextSize = 10, TextColor3 = C.Muted, Size = UDim2.new(1, 0, 0, 14), Position = UDim2.fromOffset(2, 82), Parent = body })
+local statusPill = label({ Text = "KEY REQUIRED", Font = FONT_BOLD, TextSize = 10, TextColor3 = C.Warn, Size = UDim2.new(0.5, 0, 0, 14), Position = UDim2.new(0.5, -2, 0, 82), TextXAlignment = Enum.TextXAlignment.Right, Parent = body })
+
+local inputFrame = new("Frame", { BackgroundColor3 = C.Input, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, 48), Position = UDim2.fromOffset(0, 100), Parent = body }, { corner(12), stroke(C.Stroke, 1) })
 local inputStroke = inputFrame:FindFirstChildOfClass("UIStroke")
-label({ Text = "⚿", TextSize = 16, TextColor3 = C.Muted, Size = UDim2.fromOffset(28, 44), Position = UDim2.fromOffset(12, 0), TextXAlignment = Enum.TextXAlignment.Center, Parent = inputFrame })
+icon("key-round", 16, C.Muted, { Position = UDim2.fromOffset(15, 16), Parent = inputFrame })
 local input = new("TextBox", {
     BackgroundTransparency = 1, Font = FONT, TextSize = 14, TextColor3 = C.Text, PlaceholderColor3 = C.Muted,
     PlaceholderText = "Paste your Relay key", Text = "", ClearTextOnFocus = false, TextXAlignment = Enum.TextXAlignment.Left,
-    Size = UDim2.new(1, -52, 1, 0), Position = UDim2.fromOffset(42, 0), Parent = inputFrame,
+    Size = UDim2.new(1, -166, 1, 0), Position = UDim2.fromOffset(42, 0), Parent = inputFrame,
 })
+local submit = new("TextButton", { BackgroundColor3 = C.Accent, AutoButtonColor = false, Text = "", BorderSizePixel = 0, AnchorPoint = Vector2.new(1, 0.5), Size = UDim2.fromOffset(112, 36), Position = UDim2.new(1, -6, 0.5, 0), Parent = inputFrame }, { corner(9) })
+local submitText = label({ Text = "Submit", Font = FONT_BOLD, TextSize = 13, TextColor3 = C.OnAccent, Size = UDim2.new(1, -36, 1, 0), Position = UDim2.fromOffset(16, 0), Parent = submit })
+local submitIcon = icon("arrow-right", 14, C.OnAccent, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -14, 0.5, 0), Parent = submit })
 
-local submit = new("TextButton", {
-    BackgroundColor3 = C.Accent, AutoButtonColor = false, Text = "", BorderSizePixel = 0,
-    Size = UDim2.new(0.5, -6, 0, 42), Position = UDim2.fromOffset(0, 150), Parent = left,
-}, { corner(10) })
-label({ Text = "➜   Submit", Font = FONT_BOLD, TextSize = 14, TextColor3 = Color3.fromRGB(20, 16, 40), Size = UDim2.fromScale(1, 1), TextXAlignment = Enum.TextXAlignment.Center, Parent = submit })
+-- Status line
+local statusIcon = icon("circle-alert", 13, C.Muted, { Position = UDim2.fromOffset(2, 158), ImageTransparency = 1, Parent = body })
+local status = label({ Text = "", TextSize = 12, TextColor3 = C.Muted, Size = UDim2.new(1, -22, 0, 32), Position = UDim2.fromOffset(21, 156), TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top, Parent = body })
 
-local getKey = new("TextButton", {
-    BackgroundColor3 = C.Panel2, AutoButtonColor = false, Text = "", BorderSizePixel = 0,
-    Size = UDim2.new(0.5, -6, 0, 42), Position = UDim2.new(0.5, 6, 0, 150), Parent = left,
-}, { corner(10), stroke(C.Stroke, 1) })
-local getKeyText = label({ Text = "🌐   Get a key", Font = FONT_BOLD, TextSize = 14, Size = UDim2.fromScale(1, 1), TextXAlignment = Enum.TextXAlignment.Center, Parent = getKey })
+-- Footer pills
+local footer = new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 40), Position = UDim2.new(0, 0, 1, -40), Parent = body })
+new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8), VerticalAlignment = Enum.VerticalAlignment.Center, Parent = footer })
 
-local status = label({ Text = "", TextSize = 12, TextColor3 = C.Muted, Size = UDim2.new(1, 0, 0, 34), Position = UDim2.fromOffset(0, 200), TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top, Parent = left })
-
-label({ Text = hasFiles and "Your key is saved after the first successful load." or "This executor can't save files, you'll need to re-enter your key each time.",
-    TextSize = 11, TextColor3 = C.Muted, Size = UDim2.new(1, 0, 0, 30), Position = UDim2.new(0, 0, 1, -32), TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Bottom, Parent = left })
-
--- Divider ------------------------------------------------------------------
-new("Frame", { BackgroundColor3 = C.Stroke, BorderSizePixel = 0, Size = UDim2.new(0, 1, 1, -44), Position = UDim2.new(0.58, 0, 0, 22), Parent = panel })
-
--- Right column ---------------------------------------------------------------
-local right = new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(0.42, 0, 1, 0), Position = UDim2.fromScale(0.58, 0), Parent = panel }, { pad(26, 26, 22, 22) })
-
-label({ Text = "DETECTED GAME", TextColor3 = C.Muted, TextSize = 11, Font = FONT_BOLD, Size = UDim2.new(1, 0, 0, 14), Parent = right })
-
-local gameCard = new("Frame", { BackgroundColor3 = C.Panel2, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, 58), Position = UDim2.fromOffset(0, 20), Parent = right }, { corner(10), stroke(C.Stroke, 1) })
-local thumb = new("ImageLabel", { BackgroundColor3 = C.Input, BorderSizePixel = 0, Size = UDim2.fromOffset(40, 40), Position = UDim2.fromOffset(9, 9), Image = "", ScaleType = Enum.ScaleType.Crop, Parent = gameCard }, { corner(8) })
-local gameName = label({ Text = "Detecting…", Font = FONT_BOLD, TextSize = 13, Size = UDim2.new(1, -62, 0, 18), Position = UDim2.fromOffset(58, 12), TextTruncate = Enum.TextTruncate.AtEnd, Parent = gameCard })
-local gameState = label({ Text = "", TextSize = 12, TextColor3 = C.Muted, Size = UDim2.new(1, -62, 0, 16), Position = UDim2.fromOffset(58, 31), Parent = gameCard })
-
-local function infoRow(y, key, value, valueColor)
-    label({ Text = key, TextSize = 12, TextColor3 = C.Muted, Size = UDim2.new(0.5, 0, 0, 18), Position = UDim2.fromOffset(0, y), Parent = right })
-    return label({ Text = value, TextSize = 12, TextColor3 = valueColor or C.Text, Font = FONT_BOLD, Size = UDim2.new(0.5, 0, 0, 18), Position = UDim2.new(0.5, 0, 0, y), TextXAlignment = Enum.TextXAlignment.Right, Parent = right })
+local function pill(iconName, text, primary)
+    local btn = new("TextButton", { BackgroundColor3 = primary and C.Card or C.Panel, AutoButtonColor = false, Text = "", BorderSizePixel = 0, AutomaticSize = Enum.AutomaticSize.X, Size = UDim2.fromOffset(0, 36), Parent = footer }, { corner(10), stroke(primary and C.AccentDk or C.Stroke, 1), pad(0, 14, 0, 12) })
+    new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 8), Parent = btn })
+    local ic = icon(iconName, 14, primary and C.Accent or C.Muted, { Parent = btn })
+    local tx = label({ Text = text, Font = FONT_BOLD, TextSize = 12, TextColor3 = primary and C.Text or C.Muted, AutomaticSize = Enum.AutomaticSize.X, Size = UDim2.fromOffset(0, 36), Parent = btn })
+    btn.MouseEnter:Connect(function() tween(btn, { BackgroundColor3 = C.Input }) end)
+    btn.MouseLeave:Connect(function() tween(btn, { BackgroundColor3 = primary and C.Card or C.Panel }) end)
+    return btn, ic, tx
 end
-infoRow(92, "Executor", executorName())
-local statusValue = infoRow(114, "Status", "Key required", C.Warn)
 
-new("Frame", { BackgroundColor3 = C.Stroke, BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, 1), Position = UDim2.fromOffset(0, 146), Parent = right })
-
-local function linkRow(y, icon, title, value)
-    local btn = new("TextButton", { BackgroundTransparency = 1, Text = "", Size = UDim2.new(1, 0, 0, 40), Position = UDim2.fromOffset(0, y), Parent = right })
-    label({ Text = icon, TextSize = 16, TextColor3 = C.Muted, Size = UDim2.fromOffset(24, 40), TextXAlignment = Enum.TextXAlignment.Center, Parent = btn })
-    label({ Text = title, Font = FONT_BOLD, TextSize = 13, Size = UDim2.new(1, -30, 0, 18), Position = UDim2.fromOffset(32, 3), Parent = btn })
-    local sub = label({ Text = value, TextSize = 12, TextColor3 = C.Muted, Size = UDim2.new(1, -30, 0, 16), Position = UDim2.fromOffset(32, 21), Parent = btn })
+local function copyPill(iconName, text, value, doneText)
+    local btn, ic, tx = pill(iconName, text, false)
     btn.MouseButton1Click:Connect(function()
-        if typeof(setclipboard) == "function" then
-            pcall(setclipboard, value)
-            local old = sub.Text
-            sub.Text = "Copied to clipboard"
-            sub.TextColor3 = C.Good
-            task.delay(1.6, function() sub.Text = old; sub.TextColor3 = C.Muted end)
-        end
+        if typeof(setclipboard) ~= "function" then return end
+        pcall(setclipboard, value)
+        setIcon(ic, "check"); ic.ImageColor3 = C.Good; tx.Text = doneText
+        task.delay(1.5, function() setIcon(ic, iconName); ic.ImageColor3 = C.Muted; tx.Text = text end)
     end)
     return btn
 end
-linkRow(158, "💬", "Discord", CONFIG.Discord)
-linkRow(204, "🌐", "Website", CONFIG.Website)
+
+local getKey, getKeyIcon, getKeyText = pill("globe", "Get a key", true)
+copyPill("message-circle", "Discord", CONFIG.Discord, "Invite copied")
+copyPill("link", "Website", CONFIG.Website, "Link copied")
 
 -- Game detection -------------------------------------------------------------
 task.spawn(function()
@@ -349,74 +416,84 @@ task.spawn(function()
     end
     gameName.Text = name
     if supportedName then
+        setIcon(gameStateIcon, "circle-check"); gameStateIcon.ImageColor3 = C.Good
         gameState.Text = "Supported"; gameState.TextColor3 = C.Good
     elseif next(supportedGames) == nil then
+        setIcon(gameStateIcon, "circle-alert"); gameStateIcon.ImageColor3 = C.Muted
         gameState.Text = "Support list unavailable"; gameState.TextColor3 = C.Muted
     else
+        setIcon(gameStateIcon, "triangle-alert"); gameStateIcon.ImageColor3 = C.Warn
         gameState.Text = "Not supported"; gameState.TextColor3 = C.Warn
     end
     pcall(function()
         thumb.Image = "rbxthumb://type=GameIcon&id=" .. placeId .. "&w=150&h=150"
+        thumbPlaceholder.Visible = false
     end)
 end)
 
 -- Interactions ---------------------------------------------------------------
-local function setStatus(text, color)
+local function setStatus(text, color, iconName)
     status.Text = text
     status.TextColor3 = color or C.Muted
+    statusIcon.ImageTransparency = (#text > 0) and 0 or 1
+    statusIcon.ImageColor3 = color or C.Muted
+    setIcon(statusIcon, iconName or "circle-alert")
 end
 
-local function tween(obj, props, t)
-    TweenService:Create(obj, TweenInfo.new(t or 0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), props):Play()
+local function setState(text, color)
+    statusPill.Text = text
+    statusPill.TextColor3 = color
 end
 
 submit.MouseEnter:Connect(function() tween(submit, { BackgroundColor3 = C.AccentDk }) end)
 submit.MouseLeave:Connect(function() tween(submit, { BackgroundColor3 = C.Accent }) end)
-getKey.MouseEnter:Connect(function() tween(getKey, { BackgroundColor3 = C.Input }) end)
-getKey.MouseLeave:Connect(function() tween(getKey, { BackgroundColor3 = C.Panel2 }) end)
 input.Focused:Connect(function() tween(inputStroke, { Color = C.Accent }) end)
 
 getKey.MouseButton1Click:Connect(function()
     if typeof(setclipboard) == "function" then
         pcall(setclipboard, CONFIG.GetKeyUrl)
-        getKeyText.Text = "Link copied!"
-        task.delay(1.6, function() getKeyText.Text = "🌐   Get a key" end)
-        setStatus("Open the copied link in your browser to get a free or paid key.", C.Muted)
+        setIcon(getKeyIcon, "check"); getKeyIcon.ImageColor3 = C.Good; getKeyText.Text = "Link copied"
+        task.delay(1.5, function() setIcon(getKeyIcon, "globe"); getKeyIcon.ImageColor3 = C.Accent; getKeyText.Text = "Get a key" end)
+        setStatus("Open the copied link in your browser to get a free or paid key.", C.Muted, "globe")
     else
-        setStatus("Get a key at " .. CONFIG.GetKeyUrl, C.Muted)
+        setStatus("Get a key at " .. CONFIG.GetKeyUrl, C.Muted, "globe")
     end
 end)
 
 local busy = false
 local function trySubmit()
     if busy then return end
-    local key = input.Text:gsub("%s+", "")
-    if #key == 0 then setStatus("Enter your Relay key first.", C.Bad) return end
-    if not keyLooksValid(key) then setStatus("That key is not in a valid format.", C.Bad) return end
+    local k = input.Text:gsub("%s+", "")
+    if #k == 0 then setStatus("Enter your Relay key first.", C.Bad, "circle-alert") return end
+    if not keyLooksValid(k) then setStatus("That key is not in a valid format.", C.Bad, "circle-alert") return end
 
     busy = true
-    setStatus("Checking key…", C.Muted)
-    statusValue.Text = "Checking"; statusValue.TextColor3 = C.Muted
+    setStatus("Checking key…", C.Muted, "loader-circle")
+    setState("CHECKING", C.Muted)
+    submitText.Text = "Checking"; setIcon(submitIcon, "loader-circle")
 
-    local ok, message = validateKey(key)
+    local ok, message = validateKey(k)
     if not ok then
         busy = false
-        setStatus(message, C.Bad)
-        statusValue.Text = "Rejected"; statusValue.TextColor3 = C.Bad
+        setStatus(message, C.Bad, "circle-alert")
+        setState("REJECTED", C.Bad)
+        submitText.Text = "Submit"; setIcon(submitIcon, "arrow-right")
+        tween(inputStroke, { Color = C.Bad }); task.delay(0.8, function() tween(inputStroke, { Color = C.Stroke }) end)
         return
     end
 
-    setStatus("Key accepted, loading Relay…", C.Good)
-    statusValue.Text = "Loading"; statusValue.TextColor3 = C.Good
-    saveKey(key)
-    task.wait(0.4)
+    setStatus("Key accepted, loading Relay…", C.Good, "shield-check")
+    setState("ACCEPTED", C.Good)
+    submitText.Text = "Loading"; setIcon(submitIcon, "check")
+    saveKey(k)
+    task.wait(0.45)
 
     tween(panel, { BackgroundTransparency = 1 }, 0.2)
     tween(backdrop, { BackgroundTransparency = 1 }, 0.2)
     task.wait(0.2)
     gui:Destroy()
 
-    local loaded, err = loadRelay(key)
+    local loaded, err = loadRelay(k)
     if not loaded then
         clearSavedKey()
         warn("[Relay] Sanctuary loader error: " .. tostring(err))
@@ -425,15 +502,15 @@ end
 submit.MouseButton1Click:Connect(trySubmit)
 input.FocusLost:Connect(function(enter) tween(inputStroke, { Color = C.Stroke }); if enter then task.spawn(trySubmit) end end)
 
--- Drag the panel
+-- Drag by the header
 do
     local dragging, dragStart, startPos
-    panel.InputBegan:Connect(function(io)
+    header.InputBegan:Connect(function(io)
         if io.UserInputType == Enum.UserInputType.MouseButton1 or io.UserInputType == Enum.UserInputType.Touch then
             dragging = true; dragStart = io.Position; startPos = panel.Position
         end
     end)
-    panel.InputEnded:Connect(function(io)
+    header.InputEnded:Connect(function(io)
         if io.UserInputType == Enum.UserInputType.MouseButton1 or io.UserInputType == Enum.UserInputType.Touch then dragging = false end
     end)
     UserInput.InputChanged:Connect(function(io)
@@ -444,11 +521,11 @@ do
     end)
 end
 
-if savedKeyError then setStatus(savedKeyError, C.Warn) end
+if savedKeyError then setStatus(savedKeyError, C.Warn, "triangle-alert") else setStatus(hasFiles and "Your key is saved after the first successful load." or "This executor can't save files, so you'll re-enter your key each session.", C.Muted, "lock") end
 
 -- Intro animation
 panel.BackgroundTransparency = 1
 backdrop.BackgroundTransparency = 1
-gui.Parent = guiParent()
-tween(panel, { BackgroundTransparency = 0 }, 0.25)
-tween(backdrop, { BackgroundTransparency = 0.35 }, 0.25)
+gui.Parent = parentGui
+tween(panel, { BackgroundTransparency = 0 }, 0.22)
+tween(backdrop, { BackgroundTransparency = 0.45 }, 0.22)
