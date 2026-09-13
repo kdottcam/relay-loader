@@ -162,21 +162,25 @@ if typeof(remote.links) == "table" then
     CONFIG.Discord   = remote.links.discord or CONFIG.Discord
 end
 
-local supportedGames = {}
+-- Match on universe id first, then place id (a few places report an id that isn't the universe id).
+local supportedGames = {}   -- id -> game name
+local scriptByGame   = {}   -- id -> Sanctuary script url
 if typeof(remote.games) == "table" then
     for _, entry in ipairs(remote.games) do
-        if typeof(entry) == "table" and entry.placeId then
-            supportedGames[tostring(entry.placeId)] = entry.name or "Supported game"
-            if tostring(entry.placeId) == tostring(game.PlaceId) and typeof(entry.loader) == "string" and #entry.loader > 0 then
-                scriptUrlForGame = entry.loader
+        if typeof(entry) == "table" then
+            local ids = typeof(entry.ids) == "table" and entry.ids or { entry.placeId }
+            for _, id in ipairs(ids) do
+                supportedGames[tostring(id)] = entry.name or "Supported game"
+                if typeof(entry.loader) == "string" and #entry.loader > 0 then scriptByGame[tostring(id)] = entry.loader end
             end
         end
     end
 end
 
--- If the config couldn't be fetched at all, don't lock everyone out: fall back to the project loader.
-local configAvailable = next(supportedGames) ~= nil
-local gameSupported = (not configAvailable) or supportedGames[tostring(game.PlaceId)] ~= nil
+local gameKey = (supportedGames[tostring(game.GameId)] and tostring(game.GameId)) or tostring(game.PlaceId)
+scriptUrlForGame = scriptByGame[gameKey]
+
+local gameSupported = (not configAvailable) or supportedGames[gameKey] ~= nil
 local noScriptMessage = "Relay doesn't have a script for this game yet."
 
 if keyLooksValid(env.key) then
@@ -423,7 +427,7 @@ copyPill("link", "Website", CONFIG.Website, "Link copied")
 -- Game detection -------------------------------------------------------------
 task.spawn(function()
     local placeId = tostring(game.PlaceId)
-    local supportedName = supportedGames[placeId]
+    local supportedName = supportedGames[gameKey]
     local name = supportedName
     if not name then
         local ok, info = pcall(MarketPlace.GetProductInfo, MarketPlace, game.PlaceId)
