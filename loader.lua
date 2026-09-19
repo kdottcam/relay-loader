@@ -160,15 +160,19 @@ end
 
 local detectedName, supported, gameIconId = gameInfo()
 
+local forceUI = genv.RelayForceUI == true
+genv.RelayForceUI = nil
+
 local preset = rawget(_G, "key") or genv.key
-if type(preset) == "string" and validFormat(preset) and supported then
+if not forceUI and type(preset) == "string" and validFormat(preset) and supported then
 	if runLoader(preset) then return end
 end
 
 local saved = readKey()
-if saved and validFormat(saved) and supported then
+if not forceUI and saved and validFormat(saved) and supported then
 	if runLoader(saved) then return end
 end
+if forceUI then saved = nil end
 
 local Lucide
 pcall(function()
