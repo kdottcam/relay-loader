@@ -163,7 +163,7 @@ local detectedName, supported, gameIconId = gameInfo()
 local forceUI = genv.RelayForceUI == true
 genv.RelayForceUI = nil
 
-local preset = rawget(_G, "key") or genv.key
+local preset = genv.key
 if not forceUI and type(preset) == "string" and validFormat(preset) and supported then
 	if runLoader(preset) then return end
 end
