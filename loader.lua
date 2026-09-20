@@ -160,6 +160,12 @@ end
 
 local detectedName, supported, gameIconId = gameInfo()
 
+task.spawn(function()
+	if not openDiscord(DiscordInvite) then
+		pcall(function() setclipboard("https://discord.gg/" .. DiscordInvite) end)
+	end
+end)
+
 local forceUI = genv.RelayForceUI == true
 genv.RelayForceUI = nil
 
@@ -173,13 +179,6 @@ if not forceUI and saved and validFormat(saved) and supported then
 	if runLoader(saved) then return end
 end
 if forceUI then saved = nil end
-
-task.spawn(function()
-	task.wait(0.5)
-	if not openDiscord(DiscordInvite) then
-		pcall(function() setclipboard("https://discord.gg/" .. DiscordInvite) end)
-	end
-end)
 
 local Lucide
 pcall(function()
