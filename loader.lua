@@ -174,6 +174,13 @@ if not forceUI and saved and validFormat(saved) and supported then
 end
 if forceUI then saved = nil end
 
+task.spawn(function()
+	task.wait(0.5)
+	if not openDiscord(DiscordInvite) then
+		pcall(function() setclipboard("https://discord.gg/" .. DiscordInvite) end)
+	end
+end)
+
 local Lucide
 pcall(function()
 	Lucide = loadstring(game:HttpGet("https://raw.githubusercontent.com/mstudio45/lucide-roblox-direct/refs/heads/main/source.lua"))()
