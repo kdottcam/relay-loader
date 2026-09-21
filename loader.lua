@@ -139,10 +139,6 @@ local function runLoader(k)
 	return true
 end
 
-local function scriptStarted()
-	return _G.RelayStatus == "SUCCESS" or _G.SportsclubStatus == "SUCCESS" or _G.RelayLib ~= nil or genv.RelayLib ~= nil
-end
-
 local function openDiscord(code)
 	local req = (syn and syn.request) or http_request or request or (fluxus and fluxus.request)
 	if not req then return false end
@@ -169,14 +165,55 @@ end)
 local forceUI = genv.RelayForceUI == true
 genv.RelayForceUI = nil
 
+local guiBaseline = 0
+local function countGuis()
+	local n = 0
+	pcall(function()
+		for _, root in ipairs({ game:GetService("CoreGui"), LocalPlayer:FindFirstChildOfClass("PlayerGui") }) do
+			if root then
+				for _, d in ipairs(root:GetChildren()) do
+					if d:IsA("ScreenGui") and d.Name ~= "RelayKey" then n += 1 end
+				end
+			end
+		end
+		if gethui then
+			for _, d in ipairs(gethui():GetChildren()) do
+				if d:IsA("ScreenGui") and d.Name ~= "RelayKey" then n += 1 end
+			end
+		end
+	end)
+	return n
+end
+
+local function scriptStarted()
+	if _G.RelayStatus == "SUCCESS" or _G.SportsclubStatus == "SUCCESS" or _G.RelayLib ~= nil or genv.RelayLib ~= nil then return true end
+	return countGuis() > guiBaseline
+end
+
+local startupError
+
+local function tryFast(k)
+	guiBaseline = countGuis()
+	local ok, err = runLoader(k)
+	if not ok then
+		startupError = err
+		return false
+	end
+	local t0 = os.clock()
+	repeat task.wait(0.25) until scriptStarted() or os.clock() - t0 > 20
+	if scriptStarted() then return true end
+	startupError = genv.SNC_RUNNING and "The script server did not accept that key." or "The script did not start."
+	return false
+end
+
 local preset = genv.key
 if not forceUI and type(preset) == "string" and validFormat(preset) and supported then
-	if runLoader(preset) then return end
+	if tryFast(preset) then return end
 end
 
 local saved = readKey()
 if not forceUI and saved and validFormat(saved) and supported then
-	if runLoader(saved) then return end
+	if tryFast(saved) then return end
 end
 if forceUI then saved = nil end
 
@@ -386,6 +423,7 @@ local function trySubmit()
 			setStatus("KEY REJECTED", RED)
 			return
 		end
+		guiBaseline = countGuis()
 		local ok, err = runLoader(k)
 		if not ok then
 			busy = false
@@ -429,7 +467,14 @@ box.FocusLost:Connect(function(enter) if enter then trySubmit() end end)
 if saved then
 	box.Text = saved
 	message.TextColor3 = RED
-	message.Text = "Your saved key did not work. Paste a new one."
+	message.Text = "Your saved key did not work" .. (startupError and (": " .. tostring(startupError)) or ". Paste a new one.")
+elseif startupError then
+	message.TextColor3 = RED
+	message.Text = tostring(startupError)
+end
+if not supported then
+	message.TextColor3 = RED
+	message.Text = "Relay does not have a script for this game yet. Check the Discord for the game list."
 end
 
 main.Size = UDim2.fromOffset(W - 20, H - 12)
